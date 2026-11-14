@@ -3541,5 +3541,7 @@
     "Port it publishes on this machine": "Puerto que publica en esta máquina",
     "Compose file": "Archivo Compose",
     "Its path in the repository. Every service in it runs as one stack.": "Su ruta en el repositorio. Todos sus servicios se ejecutan como un solo stack.",
-    "They fill in ${NAME} in the Compose file. Pass them to a service under environment, like DATABASE_URL: ${DATABASE_URL}.": "Rellenan ${NAME} en el archivo Compose. Pásalas a un servicio en su environment, como DATABASE_URL: ${DATABASE_URL}."
+    "They fill in ${NAME} in the Compose file. Pass them to a service under environment, like DATABASE_URL: ${DATABASE_URL}.": "Rellenan ${NAME} en el archivo Compose. Pásalas a un servicio en su environment, como DATABASE_URL: ${DATABASE_URL}.",
+    "You need permission to manage machines to deploy here.": "Para desplegar aquí necesitas permiso para gestionar máquinas.",
+    "Deploys aren’t set up on this panel yet.": "Los despliegues aún no están configurados en este panel."
 }
