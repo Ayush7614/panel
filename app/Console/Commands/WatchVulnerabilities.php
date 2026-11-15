@@ -10,8 +10,12 @@ use App\Support\Security\Vulnerabilities;
 use App\Support\Security\VulnerabilityAlerts;
 use App\Support\Security\VulnerabilityScanner;
 use Illuminate\Console\Command;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Throwable;
 
 /**
@@ -164,14 +168,28 @@ class WatchVulnerabilities extends Command
         return count($scores).' scored';
     }
 
-    /** One step, its outcome on a line; a failure is reported and the rest carry on. */
+    /**
+     * One step, its outcome on a line; the rest carry on if it fails. A
+     * feed that's down or busy (NVD often is) is only logged: what it
+     * didn't answer is asked again next run. Anything else is reported.
+     */
     private function step(string $name, callable $run): void
     {
         try {
             $this->line($name.': '.$run());
         } catch (Throwable $e) {
-            report($e);
-            $this->warn($name.' failed: '.$e->getMessage());
+            if (self::feedDown($e)) {
+                Log::warning('CVE watcher: a feed is unavailable', ['step' => $name, 'error' => Str::limit($e->getMessage(), 200)]);
+            } else {
+                report($e);
+            }
+            $this->warn($name.' failed: '.Str::limit($e->getMessage(), 200));
         }
+    }
+
+    private static function feedDown(Throwable $e): bool
+    {
+        return $e instanceof ConnectionException
+            || ($e instanceof RequestException && ($e->response->serverError() || $e->response->status() === 429));
     }
 }
