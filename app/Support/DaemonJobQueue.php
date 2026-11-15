@@ -382,6 +382,11 @@ class DaemonJobQueue
         return self::atLeast($machine, (string) config('daemon.package_add_since'));
     }
 
+    public static function canQueryHostDatabases(Machine $machine): bool
+    {
+        return self::atLeast($machine, (string) config('daemon.host_database_since'));
+    }
+
     public function rescan(Machine $machine, User $user): ?DaemonJob
     {
         if ($this->unavailable($machine) !== null) {

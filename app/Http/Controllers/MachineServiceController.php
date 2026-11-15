@@ -248,7 +248,11 @@ class MachineServiceController extends Controller
         ]);
 
         if ($engine === null) {
-            return response()->json(['error' => 'ServerOS can only open PostgreSQL, MySQL and MariaDB containers.'], 409);
+            return response()->json(['error' => 'ServerOS can only open PostgreSQL, MySQL and MariaDB databases.'], 409);
+        }
+        $onHost = DatabaseConsole::onHost($found);
+        if ($onHost && ! DaemonJobQueue::canQueryHostDatabases($machine)) {
+            return response()->json(['error' => "Update the ServerOS daemon on {$machine->name} to open databases installed on the machine itself. Containers work on any version."], 409);
         }
         if (! $found['managed']) {
             return response()->json(['error' => 'Adopt this service first so ServerOS can control it.'], 409);
@@ -264,19 +268,24 @@ class MachineServiceController extends Controller
         }
 
         $write = (bool) ($data['write'] ?? false);
-        $command = DatabaseConsole::command($engine, $data['action'], $data['database'] ?? null, $data['query'] ?? null, $write, bin2hex(random_bytes(16)));
-        // Its own kind keeps it off the machine's job list; the daemon only sees service_exec.
+        $nonce = bin2hex(random_bytes(16));
+        // Its own kind keeps it off the machine's job list. A container gets
+        // a command through service_exec; a database the machine runs itself
+        // gets the daemon's own database_query, which only takes the query.
+        $job = $onHost
+            ? DatabaseConsole::hostJob($engine, (string) $found['key'], $data['action'], $data['database'] ?? null, $data['query'] ?? null, $write, $nonce)
+            : [
+                'type' => 'service_exec',
+                'service' => (string) $found['key'],
+                'command' => DatabaseConsole::command($engine, $data['action'], $data['database'] ?? null, $data['query'] ?? null, $write, $nonce),
+                'timeout_secs' => DatabaseConsole::TIMEOUT,
+            ];
         $meta = $data['action'] === 'query'
             ? array_filter(['command' => mb_substr((string) $data['query'], 0, 500), 'database' => $data['database'] ?? null, 'write' => $write], fn ($v) => $v !== null)
             : [];
 
         try {
-            $record = $queue->queue($machine, $request->user(), 'database_query', [
-                'type' => 'service_exec',
-                'service' => (string) $found['key'],
-                'command' => $command,
-                'timeout_secs' => DatabaseConsole::TIMEOUT,
-            ], (string) $found['key'], DatabaseConsole::TIMEOUT + 30, meta: $meta);
+            $record = $queue->queue($machine, $request->user(), 'database_query', $job, (string) $found['key'], DatabaseConsole::TIMEOUT + 30, meta: $meta);
         } catch (RuntimeException $e) {
             return response()->json(['error' => $e->getMessage()], 503);
         }

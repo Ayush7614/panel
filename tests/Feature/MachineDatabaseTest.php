@@ -28,6 +28,11 @@ function databaseMachine(): array
         'confidence' => 90, 'origin' => 'created', 'details' => array_filter(['managed' => $managed ? 'true' : null, 'image' => $image, 'backup' => $backup]),
     ];
 
+    $host = fn (string $key, string $name, ?string $backup, bool $managed = true) => [
+        'key' => $key, 'name' => $name, 'kind' => 'database', 'manager' => 'systemd', 'status' => 'running', 'ports' => [],
+        'confidence' => 95, 'origin' => 'discovered', 'details' => array_filter(['managed' => $managed ? 'true' : null, 'backup' => $backup]),
+    ];
+
     $workspace = Workspace::factory()->create();
     $machine = Machine::factory()->for($workspace)->create();
     $machine->forceFill([
@@ -40,6 +45,11 @@ function databaseMachine(): array
             $container('docker:ccc333ccc333', 'shop-rest-1', 'postgrest/postgrest:v12', 'pg_dumpall'),
             $container('docker:ddd444ddd444', 'cache-1', 'redis:7-alpine', null),
             $container('docker:eee555eee555', 'old-db-1', 'postgres:16', 'pg_dumpall', managed: false),
+            // Databases the machine runs itself, from the distribution.
+            $host('systemd:postgresql@16-main.service', 'postgresql', 'pg_dumpall'),
+            $host('systemd:mariadb.service', 'mariadb', 'mysqldump'),
+            $host('systemd:redis-server.service', 'redis', 'redis rdb'),
+            $host('systemd:postgresql@15-main.service', 'postgresql', 'pg_dumpall', managed: false),
         ]],
     ])->save();
 
@@ -77,7 +87,11 @@ function unlockDatabases(User $user, Workspace $workspace): void
  */
 function answerDatabaseJob(DaemonJob $job, array|string $output, int $code = 0, string $error = '', string $database = 'shop', ?array $counts = null): void
 {
-    preg_match("/^echo '([0-9a-f]{32}) result'$/m", (string) $job->command['job']['command'], $m);
+    $sent = $job->command['job'];
+    $m = [1 => $sent['nonce'] ?? null];
+    if (($sent['type'] ?? null) !== 'database_query') {
+        preg_match("/^echo '([0-9a-f]{32}) result'$/m", (string) $sent['command'], $m);
+    }
     $text = is_string($output) ? $output : ($output === [] ? '' : implode("\n", $output)."\n");
     $encode = fn (string $bytes) => $bytes === '' ? [''] : [...str_split(rtrim(base64_encode($bytes), '='), 3000), ''];
     [$bytes, $lines] = $counts ?? [strlen($text), substr_count($text, "\n")];
@@ -329,4 +343,86 @@ test('what the machine sends back is encrypted as it arrives, and kept out of Fi
         ->and(implode("\n", $log))->not->toContain('SELECT email');
 
     expect(FixEvidence::gather($machine, null)['jobs'])->toBe([]);
+});
+
+test('a database the machine runs itself gets the Database tab, and its query goes to the daemon on its own', function () {
+    [$workspace, $machine, $url] = databaseMachine();
+    $machine->forceFill(['daemon_version' => 'v0.1.1-pre.39'])->save();
+    $owner = $workspace->owner;
+    $tab = fn (string $key) => $this->actingAs($owner)->get($url.$key);
+
+    $tab('systemd:postgresql@16-main.service')->assertInertia(fn (Assert $page) => $page->where('database', ['engine' => 'postgres'])->etc());
+    $tab('systemd:mariadb.service')->assertInertia(fn (Assert $page) => $page->where('database', ['engine' => 'mysql'])->etc());
+    foreach (['systemd:redis-server.service', 'systemd:postgresql@15-main.service'] as $key) {
+        $tab($key)->assertInertia(fn (Assert $page) => $page->where('database', null)->etc());
+    }
+
+    unlockDatabases($owner, $workspace);
+    $sql = "SELECT * FROM users WHERE name = 'o''brien'; -- $(rm -rf /)";
+    $this->actingAs($owner)->postJson($url.'systemd:postgresql@16-main.service/database', ['action' => 'query', 'database' => 'shop', 'query' => $sql])
+        ->assertAccepted();
+
+    // Only the query goes over: no command for the daemon to run on the machine.
+    $job = lastDatabaseJob();
+    expect($job)->toMatchArray([
+        'type' => 'database_query',
+        'service' => 'systemd:postgresql@16-main.service',
+        'engine' => 'postgres',
+        'database' => 'shop',
+        'sql' => $sql,
+        'read_only' => true,
+        'count' => true,
+    ])->and($job)->not->toHaveKey('command')
+        ->and($job['nonce'])->toMatch('/^[0-9a-f]{32}$/');
+
+    expect(DaemonJob::query()->sole()->kind)->toBe('database_query')
+        ->and(ActivityLine::sentence(Activity::query()->where('action', 'console.command')->sole()))->toContain('ran a query in postgresql (read-only mode)');
+
+    $this->actingAs($owner)->postJson($url.'systemd:mariadb.service/database', ['action' => 'query', 'query' => 'DELETE FROM posts', 'write' => true])
+        ->assertAccepted();
+    expect(lastDatabaseJob())->toMatchArray(['engine' => 'mysql', 'database' => null, 'read_only' => false, 'count' => true]);
+
+    $this->actingAs($owner)->postJson($url.'systemd:postgresql@16-main.service/database', ['action' => 'databases'])->assertAccepted();
+    expect(lastDatabaseJob())->toMatchArray(['sql' => DatabaseConsole::sql('postgres', 'databases', null), 'count' => false]);
+
+    $this->actingAs($owner)->postJson($url.'systemd:postgresql@16-main.service/database', ['action' => 'query', 'query' => '\! id'])
+        ->assertUnprocessable();
+});
+
+test('a daemon too old for databases on the machine itself is asked to update, while containers still open', function () {
+    [$workspace, $machine, $url] = databaseMachine();
+    $machine->forceFill(['daemon_version' => 'v0.1.1-pre.38'])->save();
+    $owner = $workspace->owner;
+    unlockDatabases($owner, $workspace);
+
+    $this->actingAs($owner)->postJson($url.'systemd:postgresql@16-main.service/database', ['action' => 'tables'])
+        ->assertStatus(409)
+        ->assertJsonPath('error', "Update the ServerOS daemon on {$machine->name} to open databases installed on the machine itself. Containers work on any version.");
+    $this->actingAs($owner)->postJson($url.'docker:aaa111aaa111/database', ['action' => 'tables'])->assertAccepted();
+});
+
+test('the answer from a database on the machine itself reads like a container’s', function () {
+    [$workspace, $machine, $url] = databaseMachine();
+    $machine->forceFill(['daemon_version' => 'v0.1.1-pre.39'])->save();
+    $owner = $workspace->owner;
+    unlockDatabases($owner, $workspace);
+    $key = 'systemd:postgresql@16-main.service';
+
+    $id = $this->actingAs($owner)->postJson($url."{$key}/database", ['action' => 'query', 'query' => 'SELECT datname FROM pg_database'])->json('jobId');
+    $job = DaemonJob::query()->findOrFail($id);
+    $nonce = $job->command['job']['nonce'];
+    answerDatabaseJob($job, ['name,size', 'postgres,7503 kB', 'serveros,31 GB', "{$nonce} 2"], database: 'postgres');
+
+    $this->actingAs($owner)->getJson($url."{$key}/database/{$id}")->assertOk()->assertJson(['state' => 'succeeded', 'error' => null, 'result' => [
+        'database' => 'postgres',
+        'columns' => ['name', 'size'],
+        'rows' => [['postgres', '7503 kB'], ['serveros', '31 GB']],
+        'truncated' => false,
+        'error' => null,
+    ]]);
+
+    // A job whose nonce isn't hex never reads as a result.
+    $bad = DaemonJob::query()->findOrFail($this->actingAs($owner)->postJson($url."{$key}/database", ['action' => 'tables'])->json('jobId'));
+    $bad->forceFill(['command' => [...$bad->command, 'job' => [...$bad->command['job'], 'nonce' => 'not-hex']]])->save();
+    expect(DatabaseConsole::result($bad))->toBeNull();
 });

@@ -48,6 +48,16 @@ final class DatabaseConsole
     /** @param  array<string, mixed>  $service */
     public static function engine(array $service): ?string
     {
+        // A database the machine runs itself: the daemon backs it up with the
+        // same client the Database tab runs, and runs that client itself.
+        if (self::onHost($service)) {
+            return match ($service['details']['backup'] ?? null) {
+                'pg_dumpall' => 'postgres',
+                'mysqldump' => 'mysql',
+                default => null,
+            };
+        }
+
         if (! str_starts_with((string) ($service['key'] ?? ''), 'docker:')) {
             return null;
         }
@@ -74,13 +84,45 @@ final class DatabaseConsole
      * single-quoted words: never as settings, whose values the daemon scrubs
      * from everything the command prints.
      */
-    public static function command(string $engine, string $action, ?string $database, ?string $query, bool $write, string $nonce): string
+    /** @param  array<string, mixed>  $service */
+    public static function onHost(array $service): bool
     {
-        $sql = match ($action) {
+        return str_starts_with((string) ($service['key'] ?? ''), 'systemd:');
+    }
+
+    public static function sql(string $engine, string $action, ?string $query): string
+    {
+        return match ($action) {
             'databases' => self::DATABASES[$engine],
             'tables' => self::TABLES[$engine],
             default => (string) $query,
         };
+    }
+
+    /**
+     * The daemon's own job for a database the machine runs itself. Only the
+     * query goes over: the daemon runs the client with fixed arguments, as
+     * the service's user, and prints what it finds the way command() does.
+     *
+     * @return array<string, mixed>
+     */
+    public static function hostJob(string $engine, string $service, string $action, ?string $database, ?string $query, bool $write, string $nonce): array
+    {
+        return [
+            'type' => 'database_query',
+            'service' => $service,
+            'engine' => $engine,
+            'database' => $database === null || $database === '' ? null : $database,
+            'sql' => self::sql($engine, $action, $query),
+            'read_only' => ! $write,
+            'count' => $action === 'query',
+            'nonce' => $nonce,
+        ];
+    }
+
+    public static function command(string $engine, string $action, ?string $database, ?string $query, bool $write, string $nonce): string
+    {
+        $sql = self::sql($engine, $action, $query);
         $db = $database === null || $database === '' ? "''" : escapeshellarg($database);
         // After a query, a line of its own says how many rows it changed.
         $count = $action === 'query';
@@ -142,13 +184,22 @@ final class DatabaseConsole
      */
     public static function result(DaemonJob $job): ?array
     {
-        // The command itself says which client ran and which nonce marks its output.
-        $command = (string) ($job->command['job']['command'] ?? '');
-        if (preg_match("/^echo '([0-9a-f]{32}) result'$/m", $command, $match) !== 1) {
-            return null;
+        $sent = (array) ($job->command['job'] ?? []);
+        if (($sent['type'] ?? null) === 'database_query') {
+            $nonce = (string) ($sent['nonce'] ?? '');
+            $engine = ($sent['engine'] ?? null) === 'postgres' ? 'postgres' : 'mysql';
+            if (preg_match('/^[0-9a-f]{32}$/', $nonce) !== 1) {
+                return null;
+            }
+        } else {
+            // The command itself says which client ran and which nonce marks its output.
+            $command = (string) ($sent['command'] ?? '');
+            if (preg_match("/^echo '([0-9a-f]{32}) result'$/m", $command, $match) !== 1) {
+                return null;
+            }
+            $nonce = $match[1];
+            $engine = str_contains($command, ' psql -X ') ? 'postgres' : 'mysql';
         }
-        $nonce = $match[1];
-        $engine = str_contains($command, ' psql -X ') ? 'postgres' : 'mysql';
 
         $section = null;
         $parts = ['database' => [], 'result' => [], 'error' => [], 'end' => []];
