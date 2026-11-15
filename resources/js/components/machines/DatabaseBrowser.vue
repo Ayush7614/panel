@@ -221,10 +221,19 @@ async function loadDatabases(): Promise<void> {
         const result = await ask({ action: 'databases' });
         if (result.error) throw new DatabaseError(result.error);
         databases.value = result.rows.map((row) => row[0] ?? '');
-        database.value =
+        const connected =
             result.database && databases.value.includes(result.database)
                 ? result.database
-                : (databases.value[0] ?? null);
+                : null;
+        // A PostgreSQL installed on the machine connects to its empty
+        // `postgres` database: open the app's own database instead.
+        database.value =
+            connected !== null && connected !== 'postgres'
+                ? connected
+                : (databases.value.find((name) => name !== 'postgres') ??
+                  connected ??
+                  databases.value[0] ??
+                  null);
         await loadTables();
     } catch (error) {
         tablesError.value = failed(error);
