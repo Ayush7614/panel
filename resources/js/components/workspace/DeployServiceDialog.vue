@@ -138,6 +138,107 @@ const customTemplate = computed(
         ) ?? null,
 );
 
+type Repository = {
+    name: string;
+    url: string;
+    private: boolean;
+    branch: string;
+};
+
+// The connected GitHub accounts' repositories, offered under Your own code.
+const github = ref<{
+    connected: boolean;
+    repositories: Repository[];
+} | null>(null);
+// Kept with the repository they belong to, so the menu never offers another
+// repository's branches (after Try another, an upload, or a slow answer).
+const branches = ref<{ repo: string; names: string[] } | null>(null);
+
+const repositoryMatches = computed(() => {
+    const term = query.value.trim().toLowerCase();
+
+    if (!github.value || term.includes('://')) {
+        return [];
+    }
+
+    return github.value.repositories
+        .filter((repository) => repository.name.toLowerCase().includes(term))
+        .slice(0, 8);
+});
+
+const branchOptions = computed<SelectMenuOption<string>[]>(() => {
+    const found = detection.value;
+
+    if (!found || found.upload || branches.value?.repo !== found.repo) {
+        return [];
+    }
+
+    const names =
+        !found.branch || branches.value.names.includes(found.branch)
+            ? branches.value.names
+            : [found.branch, ...branches.value.names];
+
+    return names.map((name) => ({ value: name, label: name }));
+});
+
+async function loadRepositories(): Promise<void> {
+    if (github.value || !page.props.githubApp) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/github/repositories', {
+            credentials: 'same-origin',
+            headers: { Accept: 'application/json' },
+        });
+
+        if (response.ok) {
+            github.value = await response.json();
+        }
+    } catch {}
+}
+
+function pickRepository(repository: Repository): void {
+    query.value = repository.url;
+    void detect();
+}
+
+async function loadBranches(found: Detection): Promise<void> {
+    const match = found.upload
+        ? null
+        : found.repo.match(/^https:\/\/github\.com\/([^/]+)\/(.+?)(?:\.git)?$/);
+
+    if (!match) {
+        return;
+    }
+
+    try {
+        const response = await fetch(
+            `/github/repositories/${match[1]}/${match[2]}/branches`,
+            {
+                credentials: 'same-origin',
+                headers: { Accept: 'application/json' },
+            },
+        );
+
+        const names = response.ok ? (await response.json()).branches : null;
+
+        // An answer for a repository that's no longer shown is dropped.
+        if (names && detection.value?.repo === found.repo) {
+            branches.value = { repo: found.repo, names };
+        }
+    } catch {}
+}
+
+function switchBranch(branch: string): void {
+    if (!detection.value || branch === detection.value.branch) {
+        return;
+    }
+
+    query.value = `${detection.value.repo.replace(/\.git$/, '')}/tree/${branch}`;
+    void detect();
+}
+
 async function detect(): Promise<void> {
     const repository = query.value.trim();
 
@@ -176,6 +277,7 @@ async function detect(): Promise<void> {
 
         detection.value = body as Detection;
         customSlug.value = body.template ?? '';
+        void loadBranches(body as Detection);
     } catch {
         detectError.value = trans('Couldn’t reach the panel. Try again.');
     } finally {
@@ -288,6 +390,10 @@ const grouped = computed(() => {
 watch([query, category], () => (activeIndex.value = 0));
 
 watch(category, (next, previous) => {
+    if (next === 'Custom') {
+        void loadRepositories();
+    }
+
     if (next === 'Custom' || previous === 'Custom') {
         query.value = '';
         detection.value = null;
@@ -945,6 +1051,29 @@ const labelClass = 'text-[13px]/5 font-medium text-(--ds-text-muted)';
                                                 }}
                                             </p>
 
+                                            <div
+                                                v-if="branchOptions.length > 1"
+                                                class="flex flex-col gap-1.5"
+                                            >
+                                                <label
+                                                    for="custom-branch"
+                                                    :class="labelClass"
+                                                >
+                                                    {{ $t('Branch') }}
+                                                </label>
+                                                <SelectMenu
+                                                    id="custom-branch"
+                                                    :model-value="
+                                                        detection.branch
+                                                    "
+                                                    :options="branchOptions"
+                                                    class="h-8 rounded-md border border-input bg-transparent pr-2.5 pl-3 text-[13px]/4 text-(--ds-text) shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
+                                                    @update:model-value="
+                                                        switchBranch
+                                                    "
+                                                />
+                                            </div>
+
                                             <div class="flex flex-col gap-1.5">
                                                 <label
                                                     for="custom-setup"
@@ -1014,7 +1143,11 @@ const labelClass = 'text-[13px]/5 font-medium text-(--ds-text-muted)';
                                                         'Paste a GitHub repository above',
                                                     )
                                                 }}<template
-                                                    v-if="page.props.githubApp"
+                                                    v-if="
+                                                        page.props.githubApp &&
+                                                        github?.connected !==
+                                                            false
+                                                    "
                                                 >
                                                     {{
                                                         ' ' +
@@ -1037,6 +1170,57 @@ const labelClass = 'text-[13px]/5 font-medium text-(--ds-text-muted)';
                                                     )
                                                 "
                                             />
+                                            <div
+                                                v-else-if="
+                                                    repositoryMatches.length
+                                                "
+                                                class="flex flex-col gap-0.5"
+                                            >
+                                                <p :class="labelClass">
+                                                    {{
+                                                        $t('Your repositories')
+                                                    }}
+                                                </p>
+                                                <button
+                                                    v-for="repository in repositoryMatches"
+                                                    :key="repository.name"
+                                                    type="button"
+                                                    class="flex h-8 cursor-pointer items-center justify-between gap-3 rounded-[7px] px-2.5 text-left text-[13px] text-(--ds-text) hover:bg-(--ds-hover) focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--ds-ring)"
+                                                    @click="
+                                                        pickRepository(
+                                                            repository,
+                                                        )
+                                                    "
+                                                >
+                                                    <span
+                                                        class="truncate font-ui-mono"
+                                                        >{{
+                                                            repository.name
+                                                        }}</span
+                                                    >
+                                                    <span
+                                                        v-if="
+                                                            repository.private
+                                                        "
+                                                        class="shrink-0 rounded-full border border-(--ds-border-strong) px-2 py-px text-[11px]/4 font-medium text-(--ds-text-secondary)"
+                                                        >{{
+                                                            $t('Private')
+                                                        }}</span
+                                                    >
+                                                </button>
+                                            </div>
+                                            <a
+                                                v-else-if="
+                                                    github && !github.connected
+                                                "
+                                                href="/settings/github/connect"
+                                                class="text-[13px]/5 font-medium text-[#3B7BFF] hover:underline"
+                                                >{{
+                                                    $t(
+                                                        'Connect GitHub to pick from your repositories, private ones too',
+                                                    )
+                                                }}</a
+                                            >
 
                                             <label
                                                 class="flex cursor-pointer flex-col items-center gap-1.5 rounded-[10px] border border-dashed px-4 py-5 text-center transition-colors"
