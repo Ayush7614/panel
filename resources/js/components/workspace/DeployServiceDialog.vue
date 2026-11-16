@@ -2087,7 +2087,9 @@ const labelClass = 'text-[13px]/5 font-medium text-(--ds-text-muted)';
                                                 class="text-xs/4 text-(--ds-text-faint)"
                                                 >{{
                                                     $t(
-                                                        chosenProxy === 'caddy' && form.https
+                                                        chosenProxy ===
+                                                            'caddy' &&
+                                                            form.https
                                                             ? 'Every subdomain, like tenant.:domain, is served by this app and gets its own certificate the first time it’s visited. No DNS provider needed.'
                                                             : 'Every subdomain, like tenant.:domain, is served by this app over plain HTTP: a certificate for every subdomain needs Caddy.',
                                                         {
