@@ -60,7 +60,9 @@ final class DeployRequest
             'env.*' => ['nullable', 'string', 'max:2000'],
             'extra_env' => ['nullable', 'string', 'max:10000'],
             'php' => ['nullable', 'string', Rule::in(RepositoryDetector::PHP_VERSIONS)],
-            'compose_file' => [$template->composeFromRepo() ? 'nullable' : 'prohibited', 'string', 'max:200', 'regex:'.self::COMPOSE_FILE_PATTERN],
+            // Nullable either way: the dialog sends null for templates that don't
+            // use it, and prohibited still turns down an actual path.
+            'compose_file' => ['nullable', ...($template->composeFromRepo() ? [] : ['prohibited']), 'string', 'max:200', 'regex:'.self::COMPOSE_FILE_PATTERN],
         ];
     }
 
