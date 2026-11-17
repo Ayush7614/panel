@@ -3585,6 +3585,8 @@
     "For individual developers.": "अकेले डेवलपर्स के लिए।",
     "For small teams and projects.": "छोटी टीमों और प्रोजेक्ट्स के लिए।",
     "For agencies and small MSPs.": "एजेंसियों और छोटे MSPs के लिए।",
+    "For developers and small teams.": "डेवलपर्स और छोटी टीमों के लिए।",
+    "For agencies and MSPs.": "एजेंसियों और MSPs के लिए।",
     "Command copied": "कमांड कॉपी हो गई",
     "To update now, run this on the server as root. It also turns on the Update button here, which otherwise turns on by itself after the nightly backup.": "अभी अपडेट करने के लिए, सर्वर पर root के रूप में यह चलाएँ। इससे यहाँ अपडेट बटन भी चालू हो जाता है, जो वरना रात के बैकअप के बाद अपने आप चालू होता है।",
     "Port it publishes on this machine": "इस मशीन पर यह जो पोर्ट खोलता है",

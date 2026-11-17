@@ -3585,6 +3585,8 @@
     "For individual developers.": "Para desarrolladores individuales.",
     "For small teams and projects.": "Para equipos y proyectos pequeños.",
     "For agencies and small MSPs.": "Para agencias y MSP pequeños.",
+    "For developers and small teams.": "Para desarrolladores y equipos pequeños.",
+    "For agencies and MSPs.": "Para agencias y MSP.",
     "Command copied": "Comando copiado",
     "To update now, run this on the server as root. It also turns on the Update button here, which otherwise turns on by itself after the nightly backup.": "Para actualizar ahora, ejecuta esto en el servidor como root. También activa aquí el botón Actualizar, que si no se activa solo después de la copia de seguridad nocturna.",
     "Port it publishes on this machine": "Puerto que publica en esta máquina",
