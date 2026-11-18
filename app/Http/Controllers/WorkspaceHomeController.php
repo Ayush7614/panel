@@ -42,7 +42,8 @@ class WorkspaceHomeController extends Controller
             return to_route('workspace.welcome.show', ['workspace' => $workspace->slug]);
         }
 
-        $machines = $workspace->machines()->orderBy('name')->get();
+        // ServerOS's agent machines live on the Agents side.
+        $machines = $workspace->countedMachines()->orderBy('name')->get();
 
         return Inertia::render('workspace/Home', [
             'workspace' => $workspace->toPageProps(),

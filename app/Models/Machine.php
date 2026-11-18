@@ -70,6 +70,7 @@ use Illuminate\Support\Facades\Storage;
  * @property array{id: string|null, version_id: string|null, pretty_name: string|null}|null $os_release
  * @property bool $updates_complete false when the list came from an older daemon's capped lines
  * @property CarbonImmutable|null $vulns_scanned_at when its waiting updates were last matched against known vulnerabilities
+ * @property string|null $hosted_by the package that runs it for the workspace (ServerOS's agent machines); it doesn't use the machine allowance
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  */
@@ -85,7 +86,7 @@ class Machine extends Model
     protected static function booted(): void
     {
         static::creating(function (Machine $machine) {
-            if (! $machine->workspace->canAddMachine()) {
+            if ($machine->hosted_by === null && ! $machine->workspace->canAddMachine()) {
                 throw MachineLimitReached::for($machine->workspace);
             }
         });

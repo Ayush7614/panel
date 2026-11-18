@@ -45,7 +45,8 @@ class DaemonJobQueue
 
     public static function needsPlan(Machine $machine, string $kind): ?string
     {
-        if (! in_array($kind, self::NEEDS_PLAN, true) || $machine->workspace->isActive()) {
+        // A package's own machine is paid for by the package (agent time on ServerOS's machines).
+        if (! in_array($kind, self::NEEDS_PLAN, true) || $machine->hosted_by !== null || $machine->workspace->isActive()) {
             return null;
         }
 

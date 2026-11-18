@@ -71,6 +71,10 @@ type DeployResult = {
 const props = defineProps<{
     templates: ServiceTemplate[];
     machineId: number;
+    /** A template's slug to open on, like coding-agent from ?deploy=coding-agent. */
+    startWith?: string | null;
+    /** Opened from somewhere else (like the Agents machine picker): back closes it, so you land where you came from. */
+    backCloses?: boolean;
 }>();
 
 const emit = defineEmits<{ deployed: [result: DeployResult] }>();
@@ -681,6 +685,11 @@ function choose(
 }
 
 function back(): void {
+    if (props.backCloses) {
+        open.value = false;
+
+        return;
+    }
     step.value = 'pick';
     nextTick(() => searchInput.value?.focus());
 }
@@ -909,6 +918,17 @@ watch(
 );
 
 const labelClass = 'text-[13px]/5 font-medium text-(--ds-text-muted)';
+
+// Opened from a link that names a template: go straight to setting it up.
+watch(
+    open,
+    (isOpen) => {
+        if (isOpen && props.startWith && step.value === 'pick') {
+            choose(props.templates.find((t) => t.slug === props.startWith));
+        }
+    },
+    { immediate: true },
+);
 </script>
 
 <template>
@@ -1527,7 +1547,11 @@ const labelClass = 'text-[13px]/5 font-medium text-(--ds-text-muted)';
                                 <button
                                     type="button"
                                     class="flex size-7 cursor-pointer items-center justify-center rounded-md text-(--ds-text-muted) hover:bg-(--ds-hover) hover:text-(--ds-text) focus-visible:outline-2 focus-visible:outline-(--ds-ring)"
-                                    :aria-label="$t('Back to the library')"
+                                    :aria-label="
+                                        backCloses
+                                            ? $t('Back')
+                                            : $t('Back to the library')
+                                    "
                                     @click="back"
                                 >
                                     <ArrowLeft
@@ -2538,6 +2562,7 @@ const labelClass = 'text-[13px]/5 font-medium text-(--ds-text-muted)';
                                 <AppButton
                                     size="sm"
                                     variant="quiet"
+                                    v-if="!backCloses"
                                     @click="back"
                                 >
                                     {{ ' ' + $t('Deploy another') + ' ' }}

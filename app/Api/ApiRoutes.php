@@ -193,6 +193,15 @@ final class ApiRoutes
                 ['GET', 'workflow-runs/{run}', 'get_workflow_run'],
                 ['POST', 'workflow-runs/{run}/cancel', 'cancel_workflow_run'],
             ],
+            'Agents' => [
+                ['GET', 'agents/machines', 'list_agent_machines'],
+                ['GET', 'agents/tasks', 'list_agent_tasks'],
+                ['POST', 'agents/tasks', 'start_agents'],
+                ['GET', 'agents/tasks/{task}', 'get_agent_task'],
+                ['POST', 'agents/tasks/{task}/agents', 'add_agents'],
+                ['POST', 'agents/tasks/{task}/stop', 'stop_agent_task'],
+                ['POST', 'agents/tasks/{task}/agents/{agent}/merge', 'merge_agent_pull_request'],
+            ],
             'Backups' => [
                 ['GET', 'backups', 'list_backups'],
                 ['GET', 'backups/destinations', 'list_backup_destinations'],
