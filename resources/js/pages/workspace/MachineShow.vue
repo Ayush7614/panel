@@ -39,6 +39,7 @@ import {
     watch,
 } from 'vue';
 import { appButtonClasses } from '@/lib/appButton';
+import { fixed } from '@/lib/formatting';
 import { toast } from '@/lib/toast';
 import type { Machine } from '@/components/machines/machines';
 import FileBrowser from '@/components/machines/FileBrowser.vue';
@@ -510,7 +511,7 @@ let refreshTimer: ReturnType<typeof setInterval> | null = null;
 
 function formatBytes(bytes: number | undefined): string {
     if (!bytes || bytes < 0) return trans('Unknown');
-    return `${(bytes / 1024 ** 3).toFixed(1)} GiB`;
+    return `${fixed(bytes / 1024 ** 3)} GiB`;
 }
 
 function formatDate(timestamp: number | undefined): string {
