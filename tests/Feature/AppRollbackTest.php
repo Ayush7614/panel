@@ -253,3 +253,22 @@ test('a deploy of an uploaded zip names the file, not our git address', function
     expect($entry->meta['upload'])->toBe('shop.zip')
         ->and(ActivityLine::describe($entry, false)['after'])->toBe('from shop.zip');
 });
+
+test('a Compose app rolls back by deploying the earlier version again', function () {
+    [$workspace, $machine] = rollbackSetup();
+    DaemonJob::query()->where('kind', 'deploy')->get()->each(function (DaemonJob $job) {
+        $job->forceFill(['command' => ['job' => [...$job->command['job'], 'compose_file' => 'compose.yaml', 'env' => ['A' => $job->command['job']['commit']]]]])->save();
+    });
+
+    $versions = AppVersions::for($machine, 'shop');
+    expect(collect($versions)->pluck('restore')->flatten()->all())->toBe([]);
+
+    expect(fn () => app(AppVersions::class)->rollback($machine, $workspace->owner, 'shop', ROLLBACK_OLD, true))
+        ->toThrow(RuntimeException::class, 'rolls back its code only');
+
+    $job = app(AppVersions::class)->rollback($machine, $workspace->owner, 'shop', ROLLBACK_OLD, false);
+    expect($job->kind)->toBe('deploy');
+    $sent = collect(rollbackCommands())->last();
+    expect($sent)->type->toBe('deploy')->commit->toBe(ROLLBACK_OLD)->compose_file->toBe('compose.yaml')
+        ->and($sent['env'])->toBe(['A' => ROLLBACK_OLD]);
+});
