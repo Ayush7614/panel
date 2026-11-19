@@ -68,6 +68,7 @@ class MachineDeployController extends Controller
             'proxy' => $machine->proxy,
             'canChooseProxy' => DaemonJobQueue::canChooseProxy($machine),
             'canChooseHttps' => DaemonJobQueue::canChooseHttps($machine),
+            'freeAddress' => DeployRequest::freeAddressBase($machine),
         ]);
     }
 

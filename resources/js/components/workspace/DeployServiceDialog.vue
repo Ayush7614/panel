@@ -497,6 +497,8 @@ const proxyNames: Record<Proxy, string> = {
 const machineProxy = ref<string | null>(null);
 const canChooseProxy = ref(false);
 const canChooseHttps = ref(false);
+// Like 203-0-113-5.sslip.io: names under it resolve to the machine's public address.
+const freeAddress = ref<string | null>(null);
 const deployedProxy = ref<Proxy>('caddy');
 
 const currentProxy = computed<Proxy>(() =>
@@ -577,8 +579,10 @@ async function loadTaken(): Promise<void> {
             proxy?: string | null;
             canChooseProxy?: boolean;
             canChooseHttps?: boolean;
+            freeAddress?: string | null;
         };
         taken.value = { services: body.services, ports: body.ports };
+        freeAddress.value = body.freeAddress ?? null;
         machineProxy.value = body.proxy ?? null;
         canChooseProxy.value = Boolean(body.canChooseProxy);
         canChooseHttps.value = Boolean(body.canChooseHttps);
@@ -1828,11 +1832,32 @@ watch(
                                             :stroke-width="1.75"
                                             aria-hidden="true"
                                         />
-                                        {{
-                                            $t(
-                                                'Point a domain at this machine and it gets HTTPS automatically, with a certificate that renews itself.',
-                                            ) + ' '
-                                        }}
+                                        <span>
+                                            {{
+                                                $t(
+                                                    'Point a domain at this machine and it gets HTTPS automatically, with a certificate that renews itself.',
+                                                ) + ' '
+                                            }}
+                                            <button
+                                                v-if="
+                                                    freeAddress && form.service
+                                                "
+                                                type="button"
+                                                class="text-(--ds-text-secondary) underline decoration-(--ds-divider) underline-offset-2 hover:text-(--ds-text)"
+                                                @click="
+                                                    form.domain = `${form.service}.${freeAddress}`
+                                                "
+                                            >
+                                                {{
+                                                    $t(
+                                                        'No domain yet? Use :address',
+                                                        {
+                                                            address: `${form.service}.${freeAddress}`,
+                                                        },
+                                                    )
+                                                }}
+                                            </button>
+                                        </span>
                                     </p>
                                     <p
                                         v-else-if="dnsChecking && !dns"

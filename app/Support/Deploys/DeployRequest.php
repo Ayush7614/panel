@@ -10,6 +10,7 @@ use App\Support\ServiceTemplates\ServiceTemplate;
 use App\Support\ServiceTemplates\TemplateDeployment;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\IpUtils;
 
 final class DeployRequest
 {
@@ -73,6 +74,22 @@ final class DeployRequest
         if ($template->composeFromRepo() && ! DaemonJobQueue::canComposeFromRepo($machine)) {
             throw ValidationException::withMessages(['form' => $machine->name.'’s daemon is too old to run a Compose file from a repository. It updates itself, or run “sudo serverosd update” on the server, then deploy again.']);
         }
+    }
+
+    /**
+     * A free address for a machine with a public IPv4 address, from sslip.io:
+     * any name under 203-0-113-5.sslip.io resolves to 203.0.113.5, so an app
+     * can have a working address (and a certificate) before it has a domain.
+     */
+    public static function freeAddressBase(Machine $machine): ?string
+    {
+        $ip = (string) $machine->ip_address;
+        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4 | FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false
+            || IpUtils::checkIp($ip, ['100.64.0.0/10', '192.0.0.0/24', '198.18.0.0/15'])) {
+            return null;
+        }
+
+        return str_replace('.', '-', $ip).'.sslip.io';
     }
 
     /** @return list<string> */
