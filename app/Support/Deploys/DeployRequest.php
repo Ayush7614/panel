@@ -30,12 +30,12 @@ final class DeployRequest
             : $domain;
     }
 
-    /** @return array<string, list<string>> */
+    /** @return array<string, list<string|\Closure|\Stringable>> */
     public static function gitRules(): array
     {
         return [
             'service' => ['required', 'string', 'max:63', 'regex:'.self::SERVICE_PATTERN],
-            'repo' => ['required', 'url', 'max:500'],
+            'repo' => ['required', 'string', 'max:500', self::repoRule()],
             'commit' => ['required', 'string', 'regex:'.self::COMMIT_PATTERN],
             'port' => ['required', 'integer', 'between:1,65535'],
             'health_path' => ['required', 'string', 'max:200', 'regex:/^\/[\x21-\x7e]*$/'],
@@ -47,13 +47,13 @@ final class DeployRequest
         ];
     }
 
-    /** @return array<string, list<string>> */
+    /** @return array<string, list<string|\Closure|\Stringable>> */
     public static function templateRules(ServiceTemplate $template): array
     {
         return [
             'service' => ['required', 'string', 'max:63', 'regex:'.self::SERVICE_PATTERN],
             'port' => ['nullable', 'integer', 'between:1,65535'],
-            'repo' => [$template->isApp() ? 'required' : 'nullable', 'url', 'max:500'],
+            'repo' => [$template->isApp() ? 'required' : 'nullable', 'string', 'max:500', self::repoRule()],
             'commit' => [$template->isApp() ? 'required' : 'nullable', 'string', 'regex:'.self::COMMIT_PATTERN],
             'health_path' => ['nullable', 'string', 'max:200', 'regex:/^\/[\x21-\x7e]*$/'],
             'domain' => ['nullable', 'string', 'max:253', 'regex:'.self::DOMAIN_PATTERN],
@@ -204,6 +204,32 @@ final class DeployRequest
     public static function withHttps(array $job, ?bool $https): array
     {
         return $https === null ? $job : [...$job, 'https' => $https];
+    }
+
+    // An HTTPS address, or an SSH one fetched with the app's deploy key.
+    private static function repoRule(): \Closure
+    {
+        return function (string $attribute, mixed $value, \Closure $fail): void {
+            if (! GitRemote::isSsh($value) && filter_var($value, FILTER_VALIDATE_URL) === false) {
+                $fail('Use the repository’s HTTPS address, or its SSH one for a private repository with a deploy key.');
+            }
+        };
+    }
+
+    /**
+     * An SSH repository is fetched with the app's deploy key, and its commit
+     * comes from the machine (the panel can't read it), so it must be given.
+     */
+    public static function assertRepo(string $repo, ?string $commit = null): void
+    {
+        if (! GitRemote::isSsh($repo)) {
+            self::assertPublicRepo($repo);
+
+            return;
+        }
+        if ($commit === null || preg_match(self::COMMIT_PATTERN, $commit) !== 1) {
+            throw ValidationException::withMessages(['commit' => 'An SSH repository deploys a commit the machine has looked up with its deploy key: add the key, then look up the branch first.']);
+        }
     }
 
     public static function assertPublicRepo(string $repo): void

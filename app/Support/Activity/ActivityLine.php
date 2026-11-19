@@ -270,6 +270,7 @@ final class ActivityLine
                 ($meta['snapshot_before'] ?? null) === false => $set('turned off the snapshot before each deploy of', null, 'warn'),
                 default => $set('changed which database is snapshotted before deploys of'),
             },
+            'app.deploy_key' => $set('made a deploy key for', 'to fetch its private repository'),
             'app.push_skipped' => $set('didn’t deploy a push to', $t(':commit to :branch: :reason', ['commit' => (string) ($meta['commit'] ?? ''), 'branch' => (string) ($meta['branch'] ?? ''), 'reason' => rtrim((string) ($meta['reason'] ?? ''), '.')]), 'warn'),
             'backup_destination.update' => $set('changed the backup destination', isset($meta['from']) ? $t('(was :name)', ['name' => $meta['from']]) : null),
             'backup_destination.retry' => $set('set up the backup destination again'),

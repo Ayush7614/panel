@@ -443,7 +443,7 @@ class RepositoryDetector
     }
 
     /**
-     * @return array<array-key, mixed>|null  an object, or a list for a folder's contents
+     * @return array<array-key, mixed>|null an object, or a list for a folder's contents
      */
     private function api(string $path): ?array
     {

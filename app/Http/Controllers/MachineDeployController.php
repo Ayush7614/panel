@@ -43,7 +43,7 @@ class MachineDeployController extends Controller
 
         $data = $request->validate([...DeployRequest::gitRules(), 'commit' => self::REF_RULES]);
 
-        DeployRequest::assertPublicRepo($data['repo']);
+        DeployRequest::assertRepo($data['repo'], $data['commit'] ?? null);
         DeployRequest::assertWildcard($machine, $data['domain'] ?? null, (bool) ($data['wildcard'] ?? false));
         DeployRequest::assertBaseDir($machine, $data['base_dir'] ?? null);
         DeployRequest::assertDocker($machine, $request->user());
@@ -94,7 +94,7 @@ class MachineDeployController extends Controller
         $proxy = DeployRequest::proxy($machine, $template->web ? ($data['domain'] ?? null) : null, $data['proxy'] ?? null);
         $https = DeployRequest::https($machine, $template->web ? ($data['domain'] ?? null) : null, $data['https'] ?? null);
         if ($template->isApp()) {
-            DeployRequest::assertPublicRepo($data['repo']);
+            DeployRequest::assertRepo($data['repo'], $data['commit'] ?? null);
             $data['commit'] = $this->resolveCommit($data['repo'], $data['commit'] ?? null, $workspace, $refs);
         }
 
