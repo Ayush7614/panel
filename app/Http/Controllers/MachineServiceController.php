@@ -18,6 +18,7 @@ use App\Support\Databases\DatabaseConsole;
 use App\Support\Deploys\AppReleases;
 use App\Support\Deploys\AppVersions;
 use App\Support\Deploys\ContainerNames;
+use App\Support\Deploys\DeployOnPush;
 use App\Support\Deploys\ServiceLabels;
 use App\Support\Files\FileJobs;
 use App\Support\Machines\ServiceClones;
@@ -111,6 +112,7 @@ class MachineServiceController extends Controller
                     || (DeploySource::fromRepoUrl($deploy->command['job']['repo'] ?? null)?->usable() ?? false),
                 'deployedAt' => $deploy->created_at?->toIso8601String(),
                 'snapshotBefore' => $machine->snapshotsBeforeDeploy($deploy->service),
+                'deployOnPush' => DeployOnPush::repoName($deploy->command['job']['repo'] ?? null) === null ? null : DeployOnPush::setting($machine, (string) $deploy->service),
                 'database' => AppVersionController::databaseProps($machine, $deploy),
                 'versions' => array_map(fn (array $v) => [
                     'commit' => $v['commit'],
