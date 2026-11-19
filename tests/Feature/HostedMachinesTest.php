@@ -6,6 +6,8 @@ use App\Models\Activity;
 use App\Models\DaemonEnrolment;
 use App\Models\Machine;
 use App\Models\Workspace;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 
 beforeEach(function () {
@@ -13,6 +15,16 @@ beforeEach(function () {
     config()->set('daemon.gateway_secret', 'test-gateway-secret');
     config()->set('daemon.install_ready', true);
     Http::fake(['127.0.0.1:8090/*' => Http::response(['ok' => true])]);
+
+    // Enrolling signs the daemon's certificate, so each test gets its own CA.
+    $this->caDir = sys_get_temp_dir().'/serveros-ca-test-'.bin2hex(random_bytes(5));
+    config()->set('daemon.ca_cert', $this->caDir.'/ca.crt');
+    config()->set('daemon.ca_key', $this->caDir.'/ca.key');
+    Artisan::call('daemon:ca', ['action' => 'init']);
+});
+
+afterEach(function () {
+    File::deleteDirectory($this->caDir);
 });
 
 function hostedCsr(): string
