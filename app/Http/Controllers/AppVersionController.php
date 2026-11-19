@@ -28,7 +28,7 @@ class AppVersionController extends Controller
 {
     public static function lastDeploy(Machine $machine, ?string $container): ?DaemonJob
     {
-        if (! preg_match('/^\/?serveros-(.+)-[0-9a-f]{12}$/', (string) $container, $match)) {
+        if (! preg_match('/^\/?serveros-(.+)-[0-9a-f]{12}(?:-b)?$/', (string) $container, $match)) {
             return null;
         }
 

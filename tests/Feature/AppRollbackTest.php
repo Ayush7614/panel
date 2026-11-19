@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AppVersionController;
 use App\Models\Activity;
 use App\Models\Backup;
 use App\Models\DaemonJob;
@@ -12,6 +13,7 @@ use App\Support\DaemonJobQueue;
 use App\Support\Deploys\AppDatabase;
 use App\Support\Deploys\AppReleases;
 use App\Support\Deploys\AppVersions;
+use App\Support\Projects\Placement;
 use Illuminate\Http\Client\Request as GatewayRequest;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -271,4 +273,14 @@ test('a Compose app rolls back by deploying the earlier version again', function
     $sent = collect(rollbackCommands())->last();
     expect($sent)->type->toBe('deploy')->commit->toBe(ROLLBACK_OLD)->compose_file->toBe('compose.yaml')
         ->and($sent['env'])->toBe(['A' => ROLLBACK_OLD]);
+});
+
+test('an app redeployed beside itself is still recognised by its container', function () {
+    expect(AppReleases::parse('serveros-shop-aaaaaaaaaaaa-b'))->toBe(['app' => 'shop', 'commit' => 'aaaaaaaaaaaa'])
+        ->and(AppReleases::parse('/serveros-my-shop-aaaaaaaaaaaa'))->toBe(['app' => 'my-shop', 'commit' => 'aaaaaaaaaaaa'])
+        ->and(AppReleases::parse('serveros-shop-aaaaaaaaaaaa-c'))->toBeNull();
+
+    [, $machine] = rollbackSetup();
+    expect(AppVersionController::lastDeploy($machine, 'serveros-shop-bbbbbbbbbbbb-b')?->service)->toBe('shop')
+        ->and(Placement::containers($machine, 'shop'))->not->toBeEmpty();
 });
