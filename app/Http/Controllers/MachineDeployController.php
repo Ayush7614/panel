@@ -45,12 +45,13 @@ class MachineDeployController extends Controller
 
         DeployRequest::assertPublicRepo($data['repo']);
         DeployRequest::assertWildcard($machine, $data['domain'] ?? null, (bool) ($data['wildcard'] ?? false));
+        DeployRequest::assertBaseDir($machine, $data['base_dir'] ?? null);
         DeployRequest::assertDocker($machine, $request->user());
         $proxy = DeployRequest::proxy($machine, $data['domain'] ?? null, $data['proxy'] ?? null);
         $https = DeployRequest::https($machine, $data['domain'] ?? null, $data['https'] ?? null);
         $data['commit'] = $this->resolveCommit($data['repo'], $data['commit'] ?? null, $workspace, $refs);
 
-        $job = DeployRequest::withHttps(DeployRequest::withProxy(DeployRequest::gitJob($data), $proxy), $https);
+        $job = DeployRequest::withBaseDir(DeployRequest::withHttps(DeployRequest::withProxy(DeployRequest::gitJob($data), $proxy), $https), $data['base_dir'] ?? null);
         $response = $this->dispatch($request, $machine, $queue, $job);
 
         return $response->getStatusCode() === 202
@@ -88,6 +89,7 @@ class MachineDeployController extends Controller
 
         DeployRequest::assertWildcard($machine, $template->web ? ($data['domain'] ?? null) : null, (bool) ($data['wildcard'] ?? false));
         DeployRequest::assertComposeFromRepo($machine, $template);
+        DeployRequest::assertBaseDir($machine, $data['base_dir'] ?? null);
         DeployRequest::assertDocker($machine, $request->user());
         $proxy = DeployRequest::proxy($machine, $template->web ? ($data['domain'] ?? null) : null, $data['proxy'] ?? null);
         $https = DeployRequest::https($machine, $template->web ? ($data['domain'] ?? null) : null, $data['https'] ?? null);
@@ -97,7 +99,8 @@ class MachineDeployController extends Controller
         }
 
         $deployment = new TemplateDeployment($template, $machine, $data);
-        $response = $this->dispatch($request, $machine, $queue, DeployRequest::withHttps(DeployRequest::withProxy($deployment->job(), $proxy), $https));
+        $job = DeployRequest::withBaseDir(DeployRequest::withHttps(DeployRequest::withProxy($deployment->job(), $proxy), $https), $data['base_dir'] ?? null);
+        $response = $this->dispatch($request, $machine, $queue, $job);
 
         if ($response->getStatusCode() !== 202) {
             return $response;

@@ -43,6 +43,7 @@ final class DeployRequest
             'wildcard' => ['sometimes', 'boolean'],
             'proxy' => ['nullable', 'string', Rule::in(array_keys(Machine::PROXIES))],
             'https' => ['sometimes', 'nullable', 'boolean'],
+            'base_dir' => ['nullable', 'string', 'max:200', 'regex:'.RepositoryDetector::BASE_DIR_PATTERN],
         ];
     }
 
@@ -66,7 +67,25 @@ final class DeployRequest
             // Nullable either way: the dialog sends null for templates that don't
             // use it, and prohibited still turns down an actual path.
             'compose_file' => ['nullable', ...($template->composeFromRepo() ? [] : ['prohibited']), 'string', 'max:200', 'regex:'.self::COMPOSE_FILE_PATTERN],
+            // A Compose file is named by its path instead, so only builds take a folder.
+            'base_dir' => ['nullable', ...($template->isApp() && ! $template->composeFromRepo() ? [] : ['prohibited']), 'string', 'max:200', 'regex:'.RepositoryDetector::BASE_DIR_PATTERN],
         ];
+    }
+
+    public static function assertBaseDir(Machine $machine, ?string $baseDir): void
+    {
+        if (filled($baseDir) && ! DaemonJobQueue::canBuildFromFolder($machine)) {
+            throw ValidationException::withMessages(['base_dir' => $machine->name.'’s daemon is too old to build an app from a folder of its repository. It updates itself, or run “sudo serverosd update” on the server, then deploy again.']);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $job
+     * @return array<string, mixed>
+     */
+    public static function withBaseDir(array $job, ?string $baseDir): array
+    {
+        return filled($baseDir) ? [...$job, 'base_dir' => $baseDir] : $job;
     }
 
     public static function assertComposeFromRepo(Machine $machine, ServiceTemplate $template): void

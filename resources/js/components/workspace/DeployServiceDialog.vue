@@ -114,6 +114,7 @@ type Detection = {
     repo: string;
     branch: string;
     commit: string;
+    baseDir?: string | null;
     reasons: string[];
     composeFile?: string | null;
     composePort?: number | null;
@@ -241,7 +242,23 @@ function switchBranch(branch: string): void {
         return;
     }
 
-    query.value = `${detection.value.repo.replace(/\.git$/, '')}/tree/${branch}`;
+    const folder = detection.value.baseDir;
+    query.value = `${detection.value.repo.replace(/\.git$/, '')}/tree/${branch}${folder ? `/${folder}` : ''}`;
+    void detect();
+}
+
+// The app's folder in a monorepo: detection runs again for that folder.
+const folderInput = ref('');
+watch(
+    () => detection.value?.baseDir,
+    (folder) => (folderInput.value = folder ?? ''),
+);
+
+function switchFolder(): void {
+    if (!detection.value || detection.value.upload) return;
+    const folder = folderInput.value.trim().replace(/^\/+|\/+$/g, '');
+    if (folder === (detection.value.baseDir ?? '')) return;
+    query.value = `${detection.value.repo.replace(/\.git$/, '')}/tree/${detection.value.branch}${folder ? `/${folder}` : ''}`;
     void detect();
 }
 
@@ -325,7 +342,7 @@ function sourceLabel(found: Detection): string {
         .replace(
             /\.git$/,
             '',
-        )} · ${found.branch} @ ${found.commit.slice(0, 7)}`;
+        )}${found.baseDir ? `/${found.baseDir}` : ''} · ${found.branch} @ ${found.commit.slice(0, 7)}`;
 }
 
 function continueCustom(): void {
@@ -336,6 +353,10 @@ function continueCustom(): void {
     choose(customTemplate.value, {
         repo: detection.value.repo,
         commit: detection.value.commit,
+        // A Compose file is named by its path from the root instead.
+        baseDir: customTemplate.value.compose
+            ? null
+            : (detection.value.baseDir ?? null),
     });
 
     if (customTemplate.value.compose) {
@@ -459,6 +480,7 @@ const form = ref({
     port: '' as string | number,
     repo: '',
     commit: '',
+    base_dir: '',
     health_path: '',
     compose_file: '',
     domain: '',
@@ -649,7 +671,11 @@ function serviceNameFor(template: ServiceTemplate): string {
 
 function choose(
     template: ServiceTemplate | undefined,
-    source: { repo: string; commit: string } | null = null,
+    source: {
+        repo: string;
+        commit: string;
+        baseDir?: string | null;
+    } | null = null,
 ): void {
     if (!template) {
         return;
@@ -668,6 +694,7 @@ function choose(
                 : template.port,
         repo: source?.repo ?? '',
         commit: source?.commit ?? '',
+        base_dir: source?.baseDir ?? '',
         health_path: template.health ?? '/',
         compose_file: template.compose ?? '',
         domain: '',
@@ -837,6 +864,10 @@ async function deploy(): Promise<void> {
                 compose_file: template.compose
                     ? form.value.compose_file || null
                     : null,
+                base_dir:
+                    template.kind === 'app' && !template.compose
+                        ? form.value.base_dir || null
+                        : null,
                 domain:
                     template.web && form.value.domain
                         ? bareDomain(form.value.domain)
@@ -1166,6 +1197,44 @@ watch(
                                                     @update:model-value="
                                                         switchBranch
                                                     "
+                                                />
+                                            </div>
+
+                                            <div
+                                                v-if="!detection.upload"
+                                                class="flex flex-col gap-1.5"
+                                            >
+                                                <label
+                                                    for="custom-folder"
+                                                    :class="labelClass"
+                                                >
+                                                    {{ ' ' + $t('Folder') }}
+                                                    <span
+                                                        class="font-normal text-(--ds-text-faint)"
+                                                    >
+                                                        {{
+                                                            ' ' +
+                                                            $t(
+                                                                '(for an app in a monorepo)',
+                                                            ) +
+                                                            ' '
+                                                        }}
+                                                    </span>
+                                                </label>
+                                                <Input
+                                                    id="custom-folder"
+                                                    v-model="folderInput"
+                                                    class="h-8 font-mono text-xs"
+                                                    :placeholder="
+                                                        $t('apps/web')
+                                                    "
+                                                    autocomplete="off"
+                                                    spellcheck="false"
+                                                    :disabled="detecting"
+                                                    @keydown.enter.prevent="
+                                                        switchFolder
+                                                    "
+                                                    @blur="switchFolder"
                                                 />
                                             </div>
 

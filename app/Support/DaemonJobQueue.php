@@ -340,6 +340,16 @@ class DaemonJobQueue
     }
 
     // From this version a stack runs from a folder that outlives the deploy, so a repository's ./paths keep working.
+    public static function canBuildFromFolder(Machine $machine): bool
+    {
+        return self::atLeast($machine, (string) config('daemon.base_dir_since'));
+    }
+
+    public static function canResolveRef(Machine $machine): bool
+    {
+        return self::atLeast($machine, (string) config('daemon.resolve_ref_since'));
+    }
+
     public static function canComposeFromRepo(Machine $machine): bool
     {
         return self::atLeast($machine, (string) config('daemon.compose_repo_since'));
