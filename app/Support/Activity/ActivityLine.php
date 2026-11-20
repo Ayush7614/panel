@@ -262,11 +262,16 @@ final class ActivityLine
             'console.unlock' => $set('unlocked the console'),
             'mcp.connect' => $set('connected', 'through MCP'),
             'job.abandon' => $set($t('gave up on the stuck :kind job for', ['kind' => str_replace('_', ' ', (string) ($meta['kind'] ?? ''))]), null, 'warn'),
-            'app.settings' => match ($meta['snapshot_before'] ?? null) {
-                true => $set('turned on the snapshot before each deploy of'),
-                false => $set('turned off the snapshot before each deploy of', null, 'warn'),
+            'app.settings' => match (true) {
+                ($meta['deploy_on_push'] ?? null) === true => $set('turned on deploying each push for', $t('to :branch', ['branch' => (string) ($meta['push_branch'] ?? 'main')])),
+                ($meta['deploy_on_push'] ?? null) === false => $set('turned off deploying each push for', null, 'warn'),
+                isset($meta['push_branch']) => $set('changed the branch that deploys', $t('to :branch', ['branch' => (string) $meta['push_branch']])),
+                ($meta['snapshot_before'] ?? null) === true => $set('turned on the snapshot before each deploy of'),
+                ($meta['snapshot_before'] ?? null) === false => $set('turned off the snapshot before each deploy of', null, 'warn'),
                 default => $set('changed which database is snapshotted before deploys of'),
             },
+            'app.deploy_key' => $set('made a deploy key for', 'to fetch its private repository'),
+            'app.push_skipped' => $set('didn’t deploy a push to', $t(':commit to :branch: :reason', ['commit' => (string) ($meta['commit'] ?? ''), 'branch' => (string) ($meta['branch'] ?? ''), 'reason' => rtrim((string) ($meta['reason'] ?? ''), '.')]), 'warn'),
             'backup_destination.update' => $set('changed the backup destination', isset($meta['from']) ? $t('(was :name)', ['name' => $meta['from']]) : null),
             'backup_destination.retry' => $set('set up the backup destination again'),
             'workspace.create' => $set('created the workspace', null, 'good'),
@@ -369,7 +374,7 @@ final class ActivityLine
             $out['detail'] = $meta['cause'] ?? null;
         }
 
-        if (! $a->byPerson() && in_array($a->action, ['machine.offline', 'machine.online', 'machine.disk_full', 'monitor.down', 'monitor.up', 'backup.failed', 'backup.restore_failed', 'machine.connect', 'service.down', 'service.up', 'service.crash_loop', 'workflow.run', 'workflow.failed', 'workflow.skipped', 'fix.done', 'fix.failed', 'mcp.revoke', 'domain.active', 'machine.daemon_updated', 'daemon.update_waiting', 'panel.updated', 'panel.update_failed', 'email_domain.unverified', 'cloud.suspend', 'cloud.resume', 'cloud.end', 'cloud.throttle'], true)) {
+        if (! $a->byPerson() && in_array($a->action, ['machine.offline', 'machine.online', 'machine.disk_full', 'monitor.down', 'monitor.up', 'backup.failed', 'backup.restore_failed', 'machine.connect', 'service.down', 'service.up', 'service.crash_loop', 'workflow.run', 'workflow.failed', 'workflow.skipped', 'app.push_skipped', 'fix.done', 'fix.failed', 'mcp.revoke', 'domain.active', 'machine.daemon_updated', 'daemon.update_waiting', 'panel.updated', 'panel.update_failed', 'email_domain.unverified', 'cloud.suspend', 'cloud.resume', 'cloud.end', 'cloud.throttle'], true)) {
             $out['leads'] = true;
         }
 
