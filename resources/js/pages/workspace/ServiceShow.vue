@@ -145,6 +145,7 @@ const props = defineProps<{
         canMove: boolean;
         deployedAt: string | null;
         snapshotBefore: boolean;
+        deployOnPush: { on: boolean; branch: string } | null;
         database: {
             setting: string;
             current: { name: string; display: string } | null;
@@ -668,6 +669,65 @@ async function saveDatabase(value: string): Promise<void> {
         );
     }
     router.reload({ only: ['app'] });
+}
+
+const deployOnPush = ref(props.app?.deployOnPush?.on ?? false);
+const pushBranch = ref(props.app?.deployOnPush?.branch ?? 'main');
+const pushBranchError = ref<string | null>(null);
+watch(
+    () => props.app?.deployOnPush,
+    (setting) => {
+        if (!setting) return;
+        deployOnPush.value = setting.on;
+        pushBranch.value = setting.branch;
+    },
+);
+
+async function savePushSettings(body: {
+    deploy_on_push?: boolean;
+    push_branch?: string;
+}): Promise<boolean> {
+    if (!props.app) return false;
+    pushBranchError.value = null;
+    const response = await fetch(
+        `/machines/${props.machine.id}/apps/${props.app.service}/settings`,
+        {
+            method: 'PUT',
+            credentials: 'same-origin',
+            headers: {
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrf(),
+            },
+            body: JSON.stringify(body),
+        },
+    ).catch(() => null);
+    if (!response?.ok) {
+        const message = response
+            ? await responseError(response)
+            : networkMessage();
+        if (body.push_branch !== undefined) pushBranchError.value = message;
+        else toast.error(message);
+        return false;
+    }
+
+    return true;
+}
+
+async function saveDeployOnPush(on: boolean): Promise<void> {
+    const saved = await savePushSettings({
+        deploy_on_push: on,
+        push_branch: pushBranch.value.trim() || 'main',
+    });
+    if (!saved) deployOnPush.value = !on;
+}
+
+async function savePushBranch(): Promise<void> {
+    const branch = pushBranch.value.trim();
+    if (!branch || branch === props.app?.deployOnPush?.branch) return;
+    if (await savePushSettings({ push_branch: branch })) {
+        router.reload({ only: ['app'] });
+    }
 }
 
 async function saveSnapshotBefore(on: boolean): Promise<void> {
@@ -1736,6 +1796,43 @@ const focusRing =
                             @update:model-value="saveSnapshotBefore"
                         />
                     </label>
+                    <div
+                        v-if="app.deployOnPush"
+                        class="flex w-full flex-wrap items-center gap-2.5 text-[13px] text-(--ds-text-secondary)"
+                    >
+                        <label class="flex items-center gap-2.5">
+                            {{ ' ' + $t('Deploy each push to') }}
+                            <Input
+                                v-model="pushBranch"
+                                class="h-8 w-36 font-mono text-xs"
+                                :aria-label="$t('Branch')"
+                                :disabled="!canManage"
+                                spellcheck="false"
+                                @blur="savePushBranch"
+                                @keydown.enter.prevent="savePushBranch"
+                            />
+                            <ToggleSwitch
+                                v-model="deployOnPush"
+                                :label="$t('Deploy each push')"
+                                :disabled="!canManage"
+                                @update:model-value="saveDeployOnPush"
+                            />
+                        </label>
+                        <span
+                            v-if="pushBranchError"
+                            class="text-xs text-(--ds-red)"
+                            >{{ pushBranchError }}</span
+                        >
+                        <span v-else class="text-xs text-(--ds-text-faint)">{{
+                            deployOnPush
+                                ? $t(
+                                      'Each push deploys with the settings it has now. Needs the GitHub app on the repository.',
+                                  )
+                                : $t(
+                                      'Turn on to deploy every push without a workflow.',
+                                  )
+                        }}</span>
+                    </div>
                     <label
                         v-if="snapshotBefore"
                         class="flex w-full flex-wrap items-center gap-2.5 text-[13px] text-(--ds-text-secondary)"

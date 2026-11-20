@@ -163,7 +163,7 @@ class AiProviders
                     ->post('https://api.anthropic.com/v1/messages', [
                         'model' => $ai['model'],
                         'max_tokens' => $maxTokens,
-                        'temperature' => 0.2,
+                        // No temperature: newer Claude models (Haiku 5.5 and up) refuse it.
                         'system' => $system,
                         'messages' => [['role' => 'user', 'content' => $user]],
                     ]),

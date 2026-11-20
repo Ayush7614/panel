@@ -13,6 +13,7 @@ use App\Http\Controllers\DaemonConnectController;
 use App\Http\Controllers\DaemonInstallScriptController;
 use App\Http\Controllers\DaemonJobController;
 use App\Http\Controllers\DashboardRedirectController;
+use App\Http\Controllers\DeployKeyController;
 use App\Http\Controllers\DeploySourceController;
 use App\Http\Controllers\DomainCheckController;
 use App\Http\Controllers\FixController;
@@ -247,6 +248,9 @@ Route::domain('{workspace:slug}.'.config('app.domain'))
         Route::put('machines/{machine}/apps/{service}/variables', [AppVersionController::class, 'updateVariables'])->middleware('throttle:20,1')->name('workspace.apps.variables.update');
         Route::post('machines/{machine}/deploy', MachineDeployController::class)->middleware('throttle:10,1')->name('workspace.machines.deploy');
         Route::get('machines/{machine}/deploy/taken', [MachineDeployController::class, 'taken'])->middleware('throttle:60,1')->name('workspace.machines.deploy.taken');
+        Route::post('machines/{machine}/deploy/key', [DeployKeyController::class, 'key'])->middleware('throttle:20,1')->name('workspace.machines.deploy.key');
+        Route::post('machines/{machine}/deploy/resolve', [DeployKeyController::class, 'resolve'])->middleware('throttle:30,1')->name('workspace.machines.deploy.resolve');
+        Route::get('machines/{machine}/deploy/jobs/{job}', [DeployKeyController::class, 'show'])->withoutScopedBindings()->middleware('throttle:120,1')->name('workspace.machines.deploy.job');
         Route::post('machines/{machine}/domain-check', DomainCheckController::class)->middleware('throttle:30,1')->name('workspace.machines.domain-check');
         Route::post('console/unlock', [ConsoleLockController::class, 'unlock'])->middleware('throttle:5,1')->name('workspace.console.unlock');
         Route::post('console/lock', [ConsoleLockController::class, 'lock'])->name('workspace.console.lock');
