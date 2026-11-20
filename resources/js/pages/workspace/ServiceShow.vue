@@ -80,6 +80,7 @@ import ToggleSwitch from '@/components/workspace/ToggleSwitch.vue';
 import WorkspacePage from '@/components/workspace/WorkspacePage.vue';
 import { usePathTab } from '@/composables/usePathTab';
 import { useZipUpload } from '@/composables/useZipUpload';
+import { fixed } from '@/lib/formatting';
 import { timeAgo } from '@/lib/timeAgo';
 import { edit as securityEdit } from '@/routes/security';
 import type { Workspace, WorkspaceAccess } from '@/types';
@@ -314,8 +315,8 @@ onBeforeUnmount(() => {
 
 function bytes(value: number | null | undefined): string {
     if (value === null || value === undefined) return '—';
-    if (value >= 1024 ** 3) return `${(value / 1024 ** 3).toFixed(2)} GiB`;
-    if (value >= 1024 ** 2) return `${(value / 1024 ** 2).toFixed(1)} MiB`;
+    if (value >= 1024 ** 3) return `${fixed(value / 1024 ** 3, 2)} GiB`;
+    if (value >= 1024 ** 2) return `${fixed(value / 1024 ** 2, 1)} MiB`;
     if (value >= 1024) return `${Math.round(value / 1024)} KiB`;
 
     return `${Math.round(value)} B`;
