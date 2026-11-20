@@ -9,7 +9,7 @@ use App\Support\Edition;
 
 /**
  * A self-hosted install asks the people who run it, once they've had a
- * week with it and connected a machine, to donate or get a Business
+ * week with it and connected a machine, to donate or get a Scale
  * license. Never on serveros.com, never once the workspace is licensed, and
  * never for members who can't act on it. Dismissing it is the browser's to
  * remember, for a few months.
